@@ -5,7 +5,7 @@
 
 // ===== CONFIG =====
 const CONFIG = {
-  GAS_URL:     localStorage.getItem('gasUrl') || '',
+  GAS_URL:     localStorage.getItem('gasUrl') || 'https://script.google.com/macros/s/AKfycbzlvWTOAyu8bgQph0iKH97tcGRvkVPeOw60vjmP_Y3a1WAtIgP69YQFsyY39bfj1tl4Dg/exec',
   VILLAGE_NAME: localStorage.getItem('villageName') || 'บ้านสวนสวย',
   SERVICE_FEE:  parseFloat(localStorage.getItem('serviceFee') || '30'),
   MIN_UNITS:    parseInt(localStorage.getItem('minUnits') || '0'),
