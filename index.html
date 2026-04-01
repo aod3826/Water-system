@@ -373,15 +373,27 @@
                 <div class="flex justify-between text-sm"><span class="text-slate-600">ค่าบริการรายเดือน</span><span class="font-mono font-semibold">฿<span id="billServiceFee">30.00</span></span></div>
                 <div class="border-t border-slate-200 pt-3 flex justify-between font-bold"><span class="text-slate-700">ยอดรวม</span><span class="text-water-700 text-lg font-mono" id="billTotal">฿0.00</span></div>
               </div>
-              <button onclick="createBill()" class="w-full py-3 bg-water-600 hover:bg-water-700 text-white font-semibold rounded-xl transition-all">
-                สร้างใบแจ้งหนี้
-              </button>
+              <!-- breakdown ขั้นบันได -->
+              <div id="billBreakdown" class="hidden border-t border-slate-100 pt-2 space-y-1"></div>
+              <div class="flex gap-2">
+                <button onclick="createBill()" class="flex-1 py-3 bg-water-600 hover:bg-water-700 text-white font-semibold rounded-xl transition-all text-sm">
+                  สร้างบิลรายคน
+                </button>
+                <button onclick="createAllBills()" title="สร้างบิลทุกหลังพร้อมกัน" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+                  สร้างทั้งหมด
+                </button>
+              </div>
             </div>
           </div>
 
           <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <h3 class="font-bold text-slate-700 mb-5">โครงสร้างอัตราค่าน้ำ</h3>
-            <div class="space-y-3">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-slate-700">โครงสร้างอัตราค่าน้ำ</h3>
+              <span class="text-xs text-slate-400 bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full border border-emerald-200">มาตรฐาน อปท.</span>
+            </div>
+            <!-- dynamic จาก CONFIG — อัปเดตโดย renderBillingRateTable() -->
+            <div id="rateTableDynamic" class="space-y-3">
               <div class="flex items-center justify-between p-3 bg-water-50 rounded-xl border border-water-100">
                 <div><div class="text-sm font-semibold text-water-800">1 - 10 หน่วย</div><div class="text-xs text-water-600">อัตราพื้นฐาน</div></div>
                 <div class="font-mono font-bold text-water-700">5 บาท/หน่วย</div>
@@ -395,7 +407,7 @@
                 <div class="font-mono font-bold text-amber-700">12 บาท/หน่วย</div>
               </div>
               <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-                <div><div class="text-sm font-semibold text-slate-700">ค่าบริการรายเดือน</div><div class="text-xs text-slate-500">คงที่ทุกบ้าน</div></div>
+                <div><div class="text-sm font-semibold text-slate-700">ค่าบริการรายเดือน</div><div class="text-xs text-slate-500">คงที่ทุกหลังคาเรือน</div></div>
                 <div class="font-mono font-bold text-slate-700">30 บาท/เดือน</div>
               </div>
             </div>
@@ -550,7 +562,21 @@
               </div>
               <div>
                 <label class="label-form">ค่าบริการรายเดือน (บาท)</label>
-                <input id="settingServiceFee" type="number" value="30" class="input-form" />
+                <input id="settingServiceFee" type="number" value="30" step="0.01" class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">หน่วยขั้นต่ำที่เรียกเก็บ (หน่วย)</label>
+                <div class="flex items-center gap-2">
+                  <input id="settingMinUnits" type="number" value="0" min="0" class="input-form" />
+                  <span class="text-xs text-slate-400 whitespace-nowrap">0 = ไม่มีขั้นต่ำ</span>
+                </div>
+              </div>
+              <div>
+                <label class="label-form">VAT (%)</label>
+                <div class="flex items-center gap-2">
+                  <input id="settingVatRate" type="number" value="0" min="0" step="0.1" class="input-form" />
+                  <span class="text-xs text-slate-400 whitespace-nowrap">0 = ไม่เก็บ VAT</span>
+                </div>
               </div>
             </div>
           </div>
@@ -570,9 +596,15 @@
                 <div class="col-span-2"><label class="label-form text-xs">ราคา/หน่วย (บาท)</label><input id="tier3Rate" type="number" value="12" class="input-form text-sm" /></div>
               </div>
             </div>
-            <div class="mt-5">
-              <label class="label-form">URL Google Apps Script</label>
-              <input id="settingGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="input-form" />
+            <div class="mt-5 space-y-3">
+              <div>
+                <label class="label-form">URL Google Apps Script</label>
+                <input id="settingGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="input-form" />
+              </div>
+              <button onclick="initializeSheets()" class="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl text-sm transition-all border border-slate-200 flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+                สร้าง Google Sheets (ครั้งแรก)
+              </button>
             </div>
           </div>
         </div>
