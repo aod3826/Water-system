@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบบริหารจัดการน้ำประปาหมู่บ้าน</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { thai: ['Noto Sans Thai', 'sans-serif'], mono: ['IBM Plex Mono', 'monospace'] },
+          colors: {
+            water: { 50:'#ecfeff',100:'#cffafe',200:'#a5f3fc',300:'#67e8f9',400:'#22d3ee',500:'#06b6d4',600:'#0891b2',700:'#0e7490',800:'#155e75',900:'#164e63' },
+            slate: { 850:'#1a2332' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="font-thai bg-slate-50 text-slate-800 antialiased">
+
+<!-- ===== LOGIN PAGE ===== -->
+<div id="loginPage" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-water-900 via-water-800 to-slate-900 relative overflow-hidden">
+  <!-- Background water bubbles -->
+  <div class="absolute inset-0 overflow-hidden pointer-events-none">
+    <div class="bubble bubble-1"></div>
+    <div class="bubble bubble-2"></div>
+    <div class="bubble bubble-3"></div>
+    <div class="bubble bubble-4"></div>
+    <div class="bubble bubble-5"></div>
+  </div>
+  <div class="relative z-10 w-full max-w-md px-6">
+    <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+      <div class="text-center mb-8">
+        <div class="w-20 h-20 bg-water-400/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-water-400/30">
+          <svg class="w-10 h-10 text-water-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+        </div>
+        <h1 class="text-2xl font-bold text-white">ระบบน้ำประปาหมู่บ้าน</h1>
+        <p class="text-water-300 text-sm mt-1 font-light">Village Water Management System v2.0</p>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="text-water-200 text-sm font-medium block mb-2">ชื่อผู้ใช้งาน</label>
+          <input id="loginUser" type="text" placeholder="กรอกชื่อผู้ใช้" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-water-400 focus:bg-white/15 transition-all" />
+        </div>
+        <div>
+          <label class="text-water-200 text-sm font-medium block mb-2">รหัสผ่าน</label>
+          <input id="loginPass" type="password" placeholder="กรอกรหัสผ่าน" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-water-400 focus:bg-white/15 transition-all" />
+        </div>
+        <div id="loginError" class="hidden text-red-400 text-sm text-center py-2 bg-red-400/10 rounded-lg"></div>
+        <button onclick="doLogin()" class="w-full py-3 bg-water-500 hover:bg-water-400 text-white font-semibold rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-water-500/30 active:scale-95 mt-2">
+          เข้าสู่ระบบ
+        </button>
+      </div>
+      <p class="text-center text-white/40 text-xs mt-6">Demo: admin / admin1234</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="mainApp" class="hidden flex h-screen overflow-hidden bg-slate-100">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="sidebar w-64 bg-gradient-to-b from-water-900 to-slate-900 text-white flex flex-col shadow-2xl z-40 fixed inset-y-0 left-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
+    <!-- Logo -->
+    <div class="p-5 border-b border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-water-500/30 rounded-xl flex items-center justify-center border border-water-400/30">
+          <svg class="w-6 h-6 text-water-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+        </div>
+        <div>
+          <div class="font-bold text-sm leading-tight">น้ำประปาหมู่บ้าน</div>
+          <div class="text-water-400 text-xs font-light">บ้านสวนสวย</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+      <p class="text-white/30 text-xs font-semibold uppercase tracking-widest px-3 py-2">เมนูหลัก</p>
+      <button onclick="showPage('dashboard')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="dashboard">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <span>แดชบอร์ด</span>
+      </button>
+      <p class="text-white/30 text-xs font-semibold uppercase tracking-widest px-3 py-2 mt-2">จัดการข้อมูล</p>
+      <button onclick="showPage('users')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="users">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+        <span>ผู้ใช้น้ำ</span>
+      </button>
+      <button onclick="showPage('meter')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="meter">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        <span>บันทึกมิเตอร์</span>
+      </button>
+      <button onclick="showPage('billing')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="billing">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+        <span>คำนวณค่าน้ำ</span>
+      </button>
+      <button onclick="showPage('invoice')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="invoice">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>ใบแจ้งหนี้</span>
+      </button>
+      <button onclick="showPage('payment')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="payment">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+        <span>สถานะชำระเงิน</span>
+      </button>
+      <p class="text-white/30 text-xs font-semibold uppercase tracking-widest px-3 py-2 mt-2">อื่นๆ</p>
+      <button onclick="showPage('notify')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="notify">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span>ระบบแจ้งเตือน</span>
+        <span id="notifyBadge" class="hidden ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 font-mono">0</span>
+      </button>
+      <button onclick="showPage('reports')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="reports">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <span>รายงาน</span>
+      </button>
+      <button onclick="showPage('settings')" class="nav-btn w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all" data-page="settings">
+        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span>ตั้งค่าระบบ</span>
+      </button>
+    </nav>
+
+    <!-- User Profile Bottom -->
+    <div class="p-4 border-t border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-water-500 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0" id="avatarText">A</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-white truncate" id="sidebarUsername">Admin</div>
+          <div class="text-xs text-white/40">ผู้ดูแลระบบ</div>
+        </div>
+        <button onclick="doLogout()" class="text-white/40 hover:text-white transition-colors p-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- OVERLAY for mobile -->
+  <div id="sidebarOverlay" class="hidden fixed inset-0 bg-black/50 z-30 lg:hidden" onclick="toggleSidebar()"></div>
+
+  <!-- MAIN CONTENT -->
+  <div class="flex-1 flex flex-col min-h-screen lg:ml-64 overflow-hidden">
+
+    <!-- TOP NAVBAR -->
+    <header class="bg-white border-b border-slate-200 px-4 lg:px-6 py-4 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+      <div class="flex items-center gap-4">
+        <button onclick="toggleSidebar()" class="lg:hidden text-slate-500 hover:text-slate-700 p-1">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div>
+          <h2 id="pageTitle" class="text-lg font-bold text-slate-800">แดชบอร์ด</h2>
+          <p id="pageSubtitle" class="text-xs text-slate-400 hidden sm:block">ภาพรวมระบบน้ำประปาหมู่บ้าน</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:flex items-center gap-2 text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full border border-emerald-200">
+          <div class="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+          <span>ออนไลน์</span>
+        </div>
+        <div class="text-xs text-slate-500 font-mono hidden md:block" id="currentDate"></div>
+        <button onclick="syncData()" class="p-2 text-slate-500 hover:text-water-600 hover:bg-water-50 rounded-lg transition-all" title="รีเฟรชข้อมูล">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
+
+      <!-- ========== DASHBOARD ========== -->
+      <div id="page-dashboard" class="page-content">
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="kpi-card bg-gradient-to-br from-water-500 to-water-700 text-white rounded-2xl p-4 lg:p-5 shadow-lg shadow-water-500/20">
+            <div class="flex items-start justify-between mb-3">
+              <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+              <span class="text-white/60 text-xs">ผู้ใช้น้ำ</span>
+            </div>
+            <div class="text-2xl lg:text-3xl font-bold font-mono" id="kpiUsers">0</div>
+            <div class="text-white/70 text-xs mt-1">ครัวเรือนทั้งหมด</div>
+          </div>
+          <div class="kpi-card bg-gradient-to-br from-sky-500 to-sky-700 text-white rounded-2xl p-4 lg:p-5 shadow-lg shadow-sky-500/20">
+            <div class="flex items-start justify-between mb-3">
+              <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg></div>
+              <span class="text-white/60 text-xs">ใช้น้ำ</span>
+            </div>
+            <div class="text-2xl lg:text-3xl font-bold font-mono" id="kpiUsage">0</div>
+            <div class="text-white/70 text-xs mt-1">หน่วยเดือนนี้</div>
+          </div>
+          <div class="kpi-card bg-gradient-to-br from-emerald-500 to-emerald-700 text-white rounded-2xl p-4 lg:p-5 shadow-lg shadow-emerald-500/20">
+            <div class="flex items-start justify-between mb-3">
+              <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              <span class="text-white/60 text-xs">รายได้</span>
+            </div>
+            <div class="text-2xl lg:text-3xl font-bold font-mono" id="kpiRevenue">0</div>
+            <div class="text-white/70 text-xs mt-1">บาทเดือนนี้</div>
+          </div>
+          <div class="kpi-card bg-gradient-to-br from-rose-500 to-rose-700 text-white rounded-2xl p-4 lg:p-5 shadow-lg shadow-rose-500/20">
+            <div class="flex items-start justify-between mb-3">
+              <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              <span class="text-white/60 text-xs">ค้างชำระ</span>
+            </div>
+            <div class="text-2xl lg:text-3xl font-bold font-mono" id="kpiDebt">0</div>
+            <div class="text-white/70 text-xs mt-1">รายค้างชำระ</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div class="lg:col-span-2 bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-slate-700">การใช้น้ำรายคน (หน่วย)</h3>
+              <span class="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">เดือนนี้</span>
+            </div>
+            <div class="h-48 lg:h-60"><canvas id="barChart"></canvas></div>
+          </div>
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-slate-700">สัดส่วนรายได้</h3>
+              <span class="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">เดือนนี้</span>
+            </div>
+            <div class="h-48 lg:h-48"><canvas id="doughnutChart"></canvas></div>
+            <div class="flex justify-center gap-4 mt-3">
+              <div class="flex items-center gap-1.5 text-xs text-slate-600"><div class="w-3 h-3 rounded-full bg-emerald-500"></div>ชำระแล้ว</div>
+              <div class="flex items-center gap-1.5 text-xs text-slate-600"><div class="w-3 h-3 rounded-full bg-rose-500"></div>ค้างชำระ</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Line Chart -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 mb-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-slate-700">แนวโน้มการใช้น้ำรายเดือน</h3>
+            <span class="text-xs text-slate-400 bg-slate-50 px-3 py-1 rounded-full">12 เดือนย้อนหลัง</span>
+          </div>
+          <div class="h-48 lg:h-56"><canvas id="lineChart"></canvas></div>
+        </div>
+
+        <!-- Recent Bills Table -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="flex items-center justify-between p-5 border-b border-slate-100">
+            <h3 class="font-bold text-slate-700">รายการล่าสุด</h3>
+            <button onclick="showPage('payment')" class="text-xs text-water-600 hover:text-water-700 font-medium">ดูทั้งหมด →</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider">ชื่อ</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider hidden sm:table-cell">บ้านเลขที่</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">หน่วย</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">ยอดเงิน</th>
+                  <th class="px-4 py-3 text-center font-semibold tracking-wider">สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="recentBillsTable" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== USERS ========== -->
+      <div id="page-users" class="page-content hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div class="flex items-center gap-3">
+            <div class="relative flex-1 sm:w-64">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              <input id="userSearch" type="text" placeholder="ค้นหาผู้ใช้น้ำ..." class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-water-400 focus:ring-2 focus:ring-water-100" oninput="filterUsers()" />
+            </div>
+          </div>
+          <button onclick="openUserModal()" class="btn-primary flex items-center gap-2 px-4 py-2.5 bg-water-600 hover:bg-water-700 text-white rounded-xl text-sm font-medium transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            เพิ่มผู้ใช้น้ำ
+          </button>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider">#</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider">ชื่อ-นามสกุล</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider hidden md:table-cell">บ้านเลขที่</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider hidden lg:table-cell">เบอร์โทร</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider hidden md:table-cell">เลขมิเตอร์</th>
+                  <th class="px-4 py-3 text-center font-semibold tracking-wider">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="usersTable" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+          <div id="usersEmpty" class="hidden text-center py-16 text-slate-400">
+            <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <p>ยังไม่มีข้อมูลผู้ใช้น้ำ</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== METER ========== -->
+      <div id="page-meter" class="page-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">บันทึกค่ามิเตอร์น้ำ</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="label-form">เดือน-ปี</label>
+                <input id="meterMonth" type="month" class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">เลือกผู้ใช้น้ำ</label>
+                <select id="meterUser" class="input-form" onchange="loadPrevMeter()">
+                  <option value="">-- เลือกผู้ใช้น้ำ --</option>
+                </select>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="label-form">ค่ามิเตอร์ครั้งก่อน</label>
+                  <input id="meterPrev" type="number" placeholder="0" class="input-form bg-slate-50" readonly />
+                </div>
+                <div>
+                  <label class="label-form">ค่ามิเตอร์ปัจจุบัน</label>
+                  <input id="meterCurrent" type="number" placeholder="0" class="input-form" oninput="calcUsage()" />
+                </div>
+              </div>
+              <div class="bg-water-50 rounded-xl p-4 border border-water-200">
+                <div class="flex justify-between items-center">
+                  <span class="text-water-700 font-medium text-sm">หน่วยน้ำที่ใช้</span>
+                  <span id="meterUnits" class="text-2xl font-bold font-mono text-water-700">0 หน่วย</span>
+                </div>
+              </div>
+              <button onclick="saveMeterReading()" class="w-full py-3 bg-water-600 hover:bg-water-700 text-white font-semibold rounded-xl transition-all">
+                บันทึกค่ามิเตอร์
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-slate-700">ประวัติค่ามิเตอร์</h3>
+              <span class="text-xs text-slate-400">ล่าสุด 10 รายการ</span>
+            </div>
+            <div class="space-y-2 max-h-96 overflow-y-auto" id="meterHistory">
+              <div class="text-center py-8 text-slate-400 text-sm">ยังไม่มีประวัติ</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== BILLING ========== -->
+      <div id="page-billing" class="page-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">คำนวณค่าน้ำ</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="label-form">เดือน-ปี</label>
+                <input id="billMonth" type="month" class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">เลือกผู้ใช้น้ำ</label>
+                <select id="billUser" class="input-form" onchange="calcBill()">
+                  <option value="">-- เลือกผู้ใช้น้ำ --</option>
+                </select>
+              </div>
+              <div class="bg-slate-50 rounded-xl p-4 space-y-3">
+                <div class="flex justify-between text-sm"><span class="text-slate-600">หน่วยน้ำ</span><span class="font-mono font-semibold" id="billUnitsDisplay">0 หน่วย</span></div>
+                <div class="flex justify-between text-sm"><span class="text-slate-600">ค่าน้ำ (ขั้นบันได)</span><span class="font-mono font-semibold" id="billWaterFee">฿0.00</span></div>
+                <div class="flex justify-between text-sm"><span class="text-slate-600">ค่าบริการรายเดือน</span><span class="font-mono font-semibold">฿<span id="billServiceFee">30.00</span></span></div>
+                <div class="border-t border-slate-200 pt-3 flex justify-between font-bold"><span class="text-slate-700">ยอดรวม</span><span class="text-water-700 text-lg font-mono" id="billTotal">฿0.00</span></div>
+              </div>
+              <button onclick="createBill()" class="w-full py-3 bg-water-600 hover:bg-water-700 text-white font-semibold rounded-xl transition-all">
+                สร้างใบแจ้งหนี้
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">โครงสร้างอัตราค่าน้ำ</h3>
+            <div class="space-y-3">
+              <div class="flex items-center justify-between p-3 bg-water-50 rounded-xl border border-water-100">
+                <div><div class="text-sm font-semibold text-water-800">1 - 10 หน่วย</div><div class="text-xs text-water-600">อัตราพื้นฐาน</div></div>
+                <div class="font-mono font-bold text-water-700">5 บาท/หน่วย</div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-sky-50 rounded-xl border border-sky-100">
+                <div><div class="text-sm font-semibold text-sky-800">11 - 30 หน่วย</div><div class="text-xs text-sky-600">อัตราปกติ</div></div>
+                <div class="font-mono font-bold text-sky-700">8 บาท/หน่วย</div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100">
+                <div><div class="text-sm font-semibold text-amber-800">31 หน่วยขึ้นไป</div><div class="text-xs text-amber-600">อัตราสูง</div></div>
+                <div class="font-mono font-bold text-amber-700">12 บาท/หน่วย</div>
+              </div>
+              <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div><div class="text-sm font-semibold text-slate-700">ค่าบริการรายเดือน</div><div class="text-xs text-slate-500">คงที่ทุกบ้าน</div></div>
+                <div class="font-mono font-bold text-slate-700">30 บาท/เดือน</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== INVOICE ========== -->
+      <div id="page-invoice" class="page-content hidden">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-3">
+            <div>
+              <label class="label-form">เลือกเดือน</label>
+              <input id="invoiceMonth" type="month" class="input-form" onchange="loadInvoices()" />
+            </div>
+          </div>
+          <button onclick="printAllInvoices()" class="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-sm font-medium transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            พิมพ์ทั้งหมด
+          </button>
+        </div>
+        <div id="invoiceGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        <div id="invoiceEmpty" class="text-center py-16 text-slate-400">
+          <svg class="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p>ไม่มีใบแจ้งหนี้ในเดือนที่เลือก</p>
+        </div>
+      </div>
+
+      <!-- ========== PAYMENT ========== -->
+      <div id="page-payment" class="page-content hidden">
+        <!-- Filter tabs -->
+        <div class="flex gap-2 mb-5 flex-wrap">
+          <button onclick="filterPayment('all')" class="pay-filter active px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:border-water-300 transition-all" data-filter="all">ทั้งหมด</button>
+          <button onclick="filterPayment('unpaid')" class="pay-filter px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:border-water-300 transition-all" data-filter="unpaid">ค้างชำระ</button>
+          <button onclick="filterPayment('paid')" class="pay-filter px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 bg-white text-slate-600 hover:border-water-300 transition-all" data-filter="paid">ชำระแล้ว</button>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider">ชื่อ-สกุล</th>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider hidden sm:table-cell">เดือน</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">หน่วย</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">ยอดเงิน</th>
+                  <th class="px-4 py-3 text-center font-semibold tracking-wider">สถานะ</th>
+                  <th class="px-4 py-3 text-center font-semibold tracking-wider">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="paymentTable" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== NOTIFY ========== -->
+      <div id="page-notify" class="page-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">ตั้งค่าการแจ้งเตือน</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="label-form">LINE Notify Token</label>
+                <input id="lineToken" type="text" placeholder="ใส่ LINE Token..." class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">Telegram Bot Token</label>
+                <input id="telegramToken" type="text" placeholder="ใส่ Telegram Token..." class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">Telegram Chat ID</label>
+                <input id="telegramChatId" type="text" placeholder="ใส่ Chat ID..." class="input-form" />
+              </div>
+              <div class="flex gap-3">
+                <button onclick="sendLineNotify()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-sm transition-all">ส่ง LINE</button>
+                <button onclick="sendTelegramNotify()" class="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-medium rounded-xl text-sm transition-all">ส่ง Telegram</button>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-4">รายการค้างชำระ</h3>
+            <div id="debtList" class="space-y-3 max-h-96 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== REPORTS ========== -->
+      <div id="page-reports" class="page-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+            <label class="label-form">ปีที่ต้องการ</label>
+            <select id="reportYear" class="input-form">
+              <option value="2024">2024</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
+            </select>
+          </div>
+          <div class="flex items-end gap-3">
+            <button onclick="generateReport('monthly')" class="flex-1 py-2.5 bg-water-600 hover:bg-water-700 text-white font-medium rounded-xl text-sm transition-all">รายงานรายเดือน</button>
+            <button onclick="generateReport('yearly')" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-800 text-white font-medium rounded-xl text-sm transition-all">รายงานรายปี</button>
+          </div>
+          <div class="flex items-end gap-3">
+            <button onclick="exportPDF()" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-medium rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>PDF
+            </button>
+            <button onclick="exportExcel()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>Excel
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+          <div class="p-5 border-b border-slate-100">
+            <h3 class="font-bold text-slate-700" id="reportTitle">รายงานรายเดือน 2025</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="reportTable">
+              <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th class="px-4 py-3 text-left font-semibold tracking-wider">เดือน</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">จำนวนบิล</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">รวมหน่วย</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">รายได้รวม</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">ชำระแล้ว</th>
+                  <th class="px-4 py-3 text-right font-semibold tracking-wider">ค้างชำระ</th>
+                </tr>
+              </thead>
+              <tbody id="reportTableBody" class="divide-y divide-slate-50"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== SETTINGS ========== -->
+      <div id="page-settings" class="page-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">ตั้งค่าทั่วไป</h3>
+            <div class="space-y-4">
+              <div>
+                <label class="label-form">ชื่อหมู่บ้าน</label>
+                <input id="settingVillage" type="text" value="บ้านสวนสวย" class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">ที่อยู่</label>
+                <textarea id="settingAddress" rows="2" class="input-form resize-none">ม.5 ต.สวนหลวง อ.เมือง จ.เชียงใหม่</textarea>
+              </div>
+              <div>
+                <label class="label-form">เบอร์ติดต่อ</label>
+                <input id="settingPhone" type="text" value="053-000-000" class="input-form" />
+              </div>
+              <div>
+                <label class="label-form">ค่าบริการรายเดือน (บาท)</label>
+                <input id="settingServiceFee" type="number" value="30" class="input-form" />
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 class="font-bold text-slate-700 mb-5">โครงสร้างอัตราค่าน้ำ</h3>
+            <div class="space-y-3">
+              <div class="grid grid-cols-3 gap-3">
+                <div><label class="label-form text-xs">หน่วยที่ 1</label><input id="tier1Units" type="number" value="10" class="input-form text-sm" /></div>
+                <div class="col-span-2"><label class="label-form text-xs">ราคา/หน่วย (บาท)</label><input id="tier1Rate" type="number" value="5" class="input-form text-sm" /></div>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div><label class="label-form text-xs">หน่วยที่ 2</label><input id="tier2Units" type="number" value="30" class="input-form text-sm" /></div>
+                <div class="col-span-2"><label class="label-form text-xs">ราคา/หน่วย (บาท)</label><input id="tier2Rate" type="number" value="8" class="input-form text-sm" /></div>
+              </div>
+              <div class="grid grid-cols-3 gap-3">
+                <div><label class="label-form text-xs">เกินกว่า</label><input type="text" value="30+" class="input-form text-sm bg-slate-50" readonly /></div>
+                <div class="col-span-2"><label class="label-form text-xs">ราคา/หน่วย (บาท)</label><input id="tier3Rate" type="number" value="12" class="input-form text-sm" /></div>
+              </div>
+            </div>
+            <div class="mt-5">
+              <label class="label-form">URL Google Apps Script</label>
+              <input id="settingGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" class="input-form" />
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+          <button onclick="saveSettings()" class="px-6 py-2.5 bg-water-600 hover:bg-water-700 text-white font-semibold rounded-xl transition-all">บันทึกการตั้งค่า</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+<!-- User Modal -->
+<div id="userModal" class="modal-overlay hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl">
+    <div class="flex items-center justify-between p-5 border-b border-slate-100">
+      <h3 id="userModalTitle" class="font-bold text-slate-800">เพิ่มผู้ใช้น้ำ</h3>
+      <button onclick="closeModal('userModal')" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="p-5 space-y-4">
+      <input type="hidden" id="editUserId" />
+      <div>
+        <label class="label-form">ชื่อ-นามสกุล *</label>
+        <input id="uName" type="text" placeholder="กรอกชื่อ-นามสกุล" class="input-form" />
+      </div>
+      <div>
+        <label class="label-form">บ้านเลขที่ *</label>
+        <input id="uHouse" type="text" placeholder="เช่น 123/4" class="input-form" />
+      </div>
+      <div>
+        <label class="label-form">เบอร์โทรศัพท์</label>
+        <input id="uPhone" type="tel" placeholder="08x-xxx-xxxx" class="input-form" />
+      </div>
+      <div>
+        <label class="label-form">เลขมิเตอร์น้ำ</label>
+        <input id="uMeter" type="text" placeholder="เช่น MTR-0001" class="input-form" />
+      </div>
+    </div>
+    <div class="flex gap-3 p-5 border-t border-slate-100">
+      <button onclick="closeModal('userModal')" class="flex-1 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-sm font-medium transition-all">ยกเลิก</button>
+      <button onclick="saveUser()" class="flex-1 py-2.5 bg-water-600 hover:bg-water-700 text-white rounded-xl text-sm font-medium transition-all">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice Modal -->
+<div id="invoiceModal" class="modal-overlay hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl">
+    <div id="invoicePrintContent">
+      <div class="bg-gradient-to-r from-water-700 to-water-900 text-white p-5 rounded-t-2xl">
+        <div class="text-center">
+          <div class="text-lg font-bold">ใบแจ้งหนี้ค่าน้ำประปา</div>
+          <div class="text-water-200 text-xs mt-0.5" id="invVillageName">บ้านสวนสวย</div>
+        </div>
+      </div>
+      <div class="p-5 space-y-3">
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-500">เลขที่ใบแจ้งหนี้</span>
+          <span class="font-mono font-semibold text-slate-800" id="invBillNo">-</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-500">ชื่อ-สกุล</span>
+          <span class="font-semibold text-slate-800" id="invName">-</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-500">บ้านเลขที่</span>
+          <span class="text-slate-800" id="invHouse">-</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-500">เลขมิเตอร์</span>
+          <span class="font-mono text-slate-800" id="invMeter">-</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-500">ประจำเดือน</span>
+          <span class="text-slate-800" id="invMonth">-</span>
+        </div>
+        <div class="border-t border-slate-100 pt-3 space-y-2">
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-500">มิเตอร์ครั้งก่อน</span>
+            <span class="font-mono" id="invPrevMeter">0</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-500">มิเตอร์ปัจจุบัน</span>
+            <span class="font-mono" id="invCurrMeter">0</span>
+          </div>
+          <div class="flex justify-between text-sm font-semibold">
+            <span class="text-slate-700">หน่วยที่ใช้</span>
+            <span class="font-mono text-water-700" id="invUnits">0 หน่วย</span>
+          </div>
+        </div>
+        <div class="border-t border-slate-100 pt-3 space-y-2">
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-500">ค่าน้ำ</span>
+            <span class="font-mono" id="invWaterFee">฿0.00</span>
+          </div>
+          <div class="flex justify-between text-sm">
+            <span class="text-slate-500">ค่าบริการ</span>
+            <span class="font-mono" id="invServiceFee">฿30.00</span>
+          </div>
+          <div class="bg-water-50 rounded-xl p-3 flex justify-between font-bold border border-water-200">
+            <span class="text-water-800">ยอดรวม</span>
+            <span class="font-mono text-water-700 text-lg" id="invTotal">฿0.00</span>
+          </div>
+        </div>
+        <div class="flex justify-center">
+          <div id="invStatusBadge" class="px-4 py-1.5 rounded-full text-sm font-semibold"></div>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-3 p-4 border-t border-slate-100 no-print">
+      <button onclick="closeModal('invoiceModal')" class="flex-1 py-2.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl text-sm font-medium">ปิด</button>
+      <button onclick="printInvoice()" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+        พิมพ์
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 z-50 hidden">
+  <div class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white" id="toastInner"></div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
