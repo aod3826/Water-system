@@ -1,24 +1,26 @@
 // ============================================================
-// VILLAGE WATER MANAGEMENT SYSTEM - GOOGLE APPS SCRIPT
+// VILLAGE WATER MANAGEMENT SYSTEM - Code.gs v3.0
+// ระบบน้ำประปาหมู่บ้าน มาตรฐานเทศบาลตำบล / อบต.
 // ============================================================
 // วิธีใช้งาน:
 // 1. สร้าง Google Spreadsheet ใหม่
 // 2. เปิด Extensions > Apps Script
-// 3. วางโค้ดนี้ทั้งหมดในไฟล์ Code.gs
-// 4. ตั้งค่า SPREADSHEET_ID ให้ถูกต้อง
+// 3. วางโค้ดนี้ในไฟล์ Code.gs
+// 4. ตั้งค่า SPREADSHEET_ID ด้านล่าง
 // 5. Deploy > New Deployment > Web App
-//    - Execute as: Me
-//    - Who has access: Anyone
-// 6. Copy URL แล้วใส่ใน Frontend Settings
+//    - Execute as: Me  |  Who has access: Anyone
+// 6. ครั้งต่อไปที่แก้โค้ด: "Edit existing deployment > New version"
+//    เพื่อรักษา URL webhook เดิมไว้
 // ============================================================
 
 const SPREADSHEET_ID = 'YOUR_SPREADSHEET_ID_HERE'; // ← เปลี่ยนตรงนี้
+
 const SHEET_NAMES = {
-  USERS: 'Users',
-  METERS: 'Meters',
-  BILLS: 'Bills',
+  USERS:    'Users',
+  METERS:   'Meters',
+  BILLS:    'Bills',
   SETTINGS: 'Settings',
-  LOGS: 'Logs'
+  LOGS:     'Logs'
 };
 
 // ===== CORS HEADERS =====
@@ -29,33 +31,38 @@ function setCORSHeaders(output) {
     .setHeader('Access-Control-Allow-Headers', 'Content-Type');
 }
 
-// ===== MAIN ENTRY POINTS =====
+// ===== ENTRY POINTS =====
+// ⚠️ Frontend ใช้ GET เสมอ เพื่อหลีกเลี่ยง CORS preflight
+// ?action=xxx&data={"key":"val"}
 function doGet(e) {
   const output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
-
   try {
     const action = e.parameter.action || '';
-    const result = handleAction(action, e.parameter);
-    output.setContent(JSON.stringify(result));
+    let data = {};
+    if (e.parameter.data) {
+      try { data = JSON.parse(decodeURIComponent(e.parameter.data)); } catch (_) {}
+    }
+    const params = Object.assign({}, e.parameter, data);
+    output.setContent(JSON.stringify(handleAction(action, params)));
   } catch (err) {
     output.setContent(JSON.stringify({ success: false, error: err.message }));
   }
   return setCORSHeaders(output);
 }
 
+// รองรับ POST สำหรับ backward compatibility
 function doPost(e) {
   const output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
-
   try {
     const action = e.parameter.action || '';
     let data = {};
     if (e.postData && e.postData.contents) {
-      try { data = JSON.parse(e.postData.contents); } catch (_) { data = {}; }
+      try { data = JSON.parse(e.postData.contents); } catch (_) {}
     }
-    const result = handleAction(action, { ...e.parameter, ...data });
-    output.setContent(JSON.stringify(result));
+    const params = Object.assign({}, e.parameter, data);
+    output.setContent(JSON.stringify(handleAction(action, params)));
   } catch (err) {
     output.setContent(JSON.stringify({ success: false, error: err.message }));
   }
@@ -66,39 +73,31 @@ function doPost(e) {
 function handleAction(action, params) {
   logAction(action, params);
   switch (action) {
-    // Auth
-    case 'login':         return handleLogin(params);
-    // Users
-    case 'getUsers':      return getUsers();
-    case 'addUser':       return addUser(params);
-    case 'updateUser':    return updateUser(params);
-    case 'deleteUser':    return deleteUser(params);
-    // Meters
-    case 'getMeters':     return getMeters(params);
-    case 'addMeter':      return addMeter(params);
-    // Bills
-    case 'getBills':      return getBills(params);
-    case 'addBill':       return addBill(params);
-    case 'updatePaymentStatus': return updatePaymentStatus(params);
-    // Notifications
-    case 'sendLine':      return sendLineNotify(params);
-    case 'sendTelegram':  return sendTelegramNotify(params);
-    // Reports
-    case 'getReport':     return getReport(params);
-    // Settings
-    case 'getSettings':   return getSettings();
-    case 'saveSettings':  return saveSettings(params);
-    // Setup
-    case 'initSheets':    return initSheets();
-
-    default: return { success: false, error: `Unknown action: ${action}` };
+    case 'login':                return handleLogin(params);
+    case 'getUsers':             return getUsers();
+    case 'addUser':              return addUser(params);
+    case 'updateUser':           return updateUser(params);
+    case 'deleteUser':           return deleteUser(params);
+    case 'getMeters':            return getMeters(params);
+    case 'addMeter':             return addMeter(params);
+    case 'getBills':             return getBills(params);
+    case 'addBill':              return addBill(params);
+    case 'generateMonthlyBills': return generateMonthlyBills(params);
+    case 'updatePaymentStatus':  return updatePaymentStatus(params);
+    case 'sendLine':             return sendLineNotify(params);
+    case 'sendTelegram':         return sendTelegramNotify(params);
+    case 'getReport':            return getReport(params);
+    case 'getStats':             return getStats(params);
+    case 'getSettings':          return getSettings();
+    case 'saveSettings':         return saveSettings(params);
+    case 'initSheets':           return initSheets();
+    default: return { success: false, error: 'Unknown action: ' + action };
   }
 }
 
 // ===== HELPERS =====
 function getSheet(name) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return ss.getSheetByName(name);
+  return SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(name);
 }
 
 function getOrCreateSheet(name, headers) {
@@ -106,12 +105,10 @@ function getOrCreateSheet(name, headers) {
   let sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
-    if (headers) {
+    if (headers && headers.length) {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       sheet.getRange(1, 1, 1, headers.length)
-        .setBackground('#0891b2')
-        .setFontColor('#ffffff')
-        .setFontWeight('bold');
+        .setBackground('#0891b2').setFontColor('#ffffff').setFontWeight('bold');
       sheet.setFrozenRows(1);
     }
   }
@@ -133,7 +130,7 @@ function sheetToObjects(sheet) {
 function findRowById(sheet, id) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(id)) return i + 1; // 1-indexed
+    if (String(data[i][0]) === String(id)) return i + 1;
   }
   return -1;
 }
@@ -149,224 +146,381 @@ function now() {
 function logAction(action, params) {
   try {
     const sheet = getOrCreateSheet(SHEET_NAMES.LOGS, ['Timestamp', 'Action', 'Params']);
-    sheet.appendRow([now(), action, JSON.stringify(params).substring(0, 200)]);
+    sheet.appendRow([now(), action, JSON.stringify(params).substring(0, 250)]);
   } catch (_) {}
+}
+
+// คืนค่า settings เป็น { key: value } map
+function getSettingsMap() {
+  const sheet = getSheet(SHEET_NAMES.SETTINGS);
+  if (!sheet) return {};
+  const map = {};
+  sheetToObjects(sheet).forEach(r => { if (r.Key) map[String(r.Key)] = r.Value; });
+  return map;
+}
+
+// ===== การคำนวณค่าน้ำมาตรฐานเทศบาลตำบล / อบต. =====
+//
+// สูตร: ค่าน้ำ = คำนวณแบบขั้นบันไดสะสม (Progressive Block Rate)
+//
+// ตัวอย่าง: tier1=10หน่วย@5฿, tier2=30หน่วย@8฿, tier3=∞@12฿
+//   ใช้น้ำ 35 หน่วย:
+//   → 10 หน่วยแรก × 5฿ = 50฿
+//   → 20 หน่วยต่อไป × 8฿ = 160฿  (11-30)
+//   →  5 หน่วยที่เหลือ × 12฿ = 60฿ (31-35)
+//   ค่าน้ำรวม = 270฿
+//
+// min_units: หน่วยขั้นต่ำที่เรียกเก็บ (0 = ไม่มีขั้นต่ำ)
+//   เช่น min_units=3 → ใช้น้ำ 1 หน่วย แต่คิดเงิน 3 หน่วย
+//
+// vat_rate: อัตรา VAT (%) - ส่วนใหญ่ อปท. ไม่เก็บ (0)
+//
+function calcWaterFeeGAS(units, settings) {
+  const t1Limit = Number(settings.tier1_limit) || 10;
+  const t1Rate  = Number(settings.tier1_rate)  || 5;
+  const t2Limit = Number(settings.tier2_limit) || 30;
+  const t2Rate  = Number(settings.tier2_rate)  || 8;
+  const t3Rate  = Number(settings.tier3_rate)  || 12;
+  const minU    = Number(settings.min_units)   || 0;
+  const vatRate = Number(settings.vat_rate)    || 0;
+
+  // หน่วยที่ใช้คิดเงิน (ไม่น้อยกว่า min_units)
+  const billable = Math.max(Number(units) || 0, minU);
+
+  let fee = 0, remaining = billable;
+
+  // Tier 1
+  const u1 = Math.min(remaining, t1Limit);
+  fee += u1 * t1Rate;
+  remaining -= u1;
+
+  // Tier 2
+  if (remaining > 0) {
+    const u2 = Math.min(remaining, t2Limit - t1Limit);
+    fee += u2 * t2Rate;
+    remaining -= u2;
+  }
+
+  // Tier 3
+  if (remaining > 0) {
+    fee += remaining * t3Rate;
+  }
+
+  // VAT
+  if (vatRate > 0) fee *= (1 + vatRate / 100);
+
+  return Math.round(fee * 100) / 100;
 }
 
 // ===== AUTH =====
 function handleLogin(params) {
   const { user, pass } = params;
   const sheet = getSheet(SHEET_NAMES.SETTINGS);
-  if (!sheet) return { success: false, error: 'Settings not initialized' };
-
-  const data = sheetToObjects(sheet);
-  const users = data.filter(r => r.Key && r.Key.startsWith('user_'));
-
-  // Default: admin/admin1234
-  const adminPass = data.find(r => r.Key === 'admin_pass')?.Value || 'admin1234';
-  const staffPass = data.find(r => r.Key === 'staff_pass')?.Value || 'staff1234';
-
+  if (!sheet) return { success: false, error: 'ยังไม่ได้ตั้งค่าระบบ กรุณา initSheets ก่อน' };
+  const s = getSettingsMap();
+  const adminPass = s.admin_pass || 'admin1234';
+  const staffPass = s.staff_pass || 'staff1234';
   if ((user === 'admin' && pass === adminPass) || (user === 'staff' && pass === staffPass)) {
     return { success: true, role: user };
   }
-  return { success: false, error: 'Invalid credentials' };
+  return { success: false, error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' };
 }
 
 // ===== USERS CRUD =====
-
-/** GET /getUsers */
 function getUsers() {
   const sheet = getOrCreateSheet(SHEET_NAMES.USERS,
-    ['id', 'name', 'house', 'phone', 'meter', 'createdAt']);
+    ['id','name','house','phone','meter','createdAt']);
   return { success: true, data: sheetToObjects(sheet) };
 }
 
-/** POST /addUser */
 function addUser(params) {
   const { name, house, phone, meter } = params;
-  if (!name || !house) return { success: false, error: 'name and house required' };
-
+  if (!name || !house) return { success: false, error: 'กรุณากรอกชื่อและบ้านเลขที่' };
   const sheet = getOrCreateSheet(SHEET_NAMES.USERS,
-    ['id', 'name', 'house', 'phone', 'meter', 'createdAt']);
+    ['id','name','house','phone','meter','createdAt']);
   const id = params.id || generateId('U');
-  sheet.appendRow([id, name, house, phone || '', meter || '', now()]);
+  sheet.appendRow([id, name, house, phone||'', meter||'', now()]);
   return { success: true, id };
 }
 
-/** POST /updateUser */
 function updateUser(params) {
   const { id, name, house, phone, meter } = params;
   const sheet = getSheet(SHEET_NAMES.USERS);
-  if (!sheet) return { success: false, error: 'Users sheet not found' };
-
+  if (!sheet) return { success: false, error: 'ไม่พบ Users sheet' };
   const row = findRowById(sheet, id);
-  if (row === -1) return { success: false, error: 'User not found' };
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const rowData = sheet.getRange(row, 1, 1, headers.length).getValues()[0];
-
+  if (row === -1) return { success: false, error: 'ไม่พบผู้ใช้น้ำ' };
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  const rowData = sheet.getRange(row,1,1,headers.length).getValues()[0];
   const mapping = { name, house, phone, meter };
   headers.forEach((h, i) => { if (mapping[h] !== undefined) rowData[i] = mapping[h]; });
-  sheet.getRange(row, 1, 1, headers.length).setValues([rowData]);
-
+  sheet.getRange(row,1,1,headers.length).setValues([rowData]);
   return { success: true };
 }
 
-/** POST /deleteUser */
 function deleteUser(params) {
   const sheet = getSheet(SHEET_NAMES.USERS);
-  if (!sheet) return { success: false, error: 'Users sheet not found' };
+  if (!sheet) return { success: false, error: 'ไม่พบ Users sheet' };
   const row = findRowById(sheet, params.id);
-  if (row === -1) return { success: false, error: 'User not found' };
+  if (row === -1) return { success: false, error: 'ไม่พบผู้ใช้น้ำ' };
   sheet.deleteRow(row);
   return { success: true };
 }
 
 // ===== METERS =====
-
-/** GET /getMeters */
 function getMeters(params) {
   const sheet = getOrCreateSheet(SHEET_NAMES.METERS,
-    ['id', 'userId', 'month', 'prev', 'curr', 'units', 'recordedAt']);
+    ['id','userId','month','prev','curr','units','recordedAt']);
   let data = sheetToObjects(sheet);
-  if (params.userId) data = data.filter(r => r.userId === params.userId);
-  if (params.month) data = data.filter(r => r.month === params.month);
+  if (params.userId) data = data.filter(r => String(r.userId) === String(params.userId));
+  if (params.month)  data = data.filter(r => r.month === params.month);
   return { success: true, data };
 }
 
-/** POST /addMeter */
 function addMeter(params) {
-  const { userId, month, prev, curr, units } = params;
-  if (!userId || !month) return { success: false, error: 'userId and month required' };
+  let { userId, month, prev, curr, units } = params;
+  if (!userId || !month) return { success: false, error: 'กรุณาระบุ userId และ month' };
+
+  curr = Number(curr) || 0;
+
+  // ถ้าไม่ระบุ prev ให้หาค่าจากเดือนก่อน
+  if (prev === undefined || prev === null || prev === '') {
+    prev = getPrevMeterReading(userId, month);
+  }
+  prev = Number(prev) || 0;
+
+  units = Number(units) || Math.max(0, curr - prev);
 
   const sheet = getOrCreateSheet(SHEET_NAMES.METERS,
-    ['id', 'userId', 'month', 'prev', 'curr', 'units', 'recordedAt']);
+    ['id','userId','month','prev','curr','units','recordedAt']);
 
-  // Remove existing record for same user+month
-  const existing = sheetToObjects(sheet).find(r => r.userId === userId && r.month === month);
+  // แทนที่ record เดิม (ถ้ามี)
+  const existing = sheetToObjects(sheet).find(
+    r => String(r.userId) === String(userId) && r.month === month
+  );
   if (existing) {
     const row = findRowById(sheet, existing.id);
     if (row > 0) sheet.deleteRow(row);
   }
 
   const id = params.id || generateId('M');
-  sheet.appendRow([id, userId, month, prev || 0, curr || 0, units || (curr - prev), now()]);
-  return { success: true, id };
+  sheet.appendRow([id, userId, month, prev, curr, units, now()]);
+  return { success: true, id, prev, curr, units };
+}
+
+// ค้นหาค่ามิเตอร์ปิดของเดือนก่อนหน้า
+function getPrevMeterReading(userId, month) {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  const prevMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+
+  // ค้นหาจาก Meters ก่อน
+  const metersSheet = getSheet(SHEET_NAMES.METERS);
+  if (metersSheet) {
+    const prev = sheetToObjects(metersSheet)
+      .find(r => String(r.userId) === String(userId) && r.month === prevMonth);
+    if (prev) return Number(prev.curr) || 0;
+  }
+
+  // fallback: ค้นจาก Bills
+  const billsSheet = getSheet(SHEET_NAMES.BILLS);
+  if (billsSheet) {
+    const prevBill = sheetToObjects(billsSheet)
+      .find(b => String(b.userId) === String(userId) && b.month === prevMonth);
+    if (prevBill) return Number(prevBill.currMeter) || 0;
+  }
+
+  return 0;
 }
 
 // ===== BILLS =====
-
-/** GET /getBills */
 function getBills(params) {
   const sheet = getOrCreateSheet(SHEET_NAMES.BILLS,
-    ['id', 'userId', 'month', 'prevMeter', 'currMeter', 'units',
-     'waterFee', 'serviceFee', 'total', 'status', 'paidDate', 'createdAt']);
+    ['id','userId','month','prevMeter','currMeter','units',
+     'waterFee','serviceFee','total','status','paidDate','createdAt']);
   let data = sheetToObjects(sheet);
-  if (params.userId) data = data.filter(r => r.userId === params.userId);
-  if (params.month) data = data.filter(r => r.month === params.month);
+  if (params.userId) data = data.filter(r => String(r.userId) === String(params.userId));
+  if (params.month)  data = data.filter(r => r.month === params.month);
   if (params.status) data = data.filter(r => r.status === params.status);
   return { success: true, data };
 }
 
-/** POST /addBill */
 function addBill(params) {
   const { userId, month, prevMeter, currMeter, units, waterFee, serviceFee, total } = params;
-  if (!userId || !month) return { success: false, error: 'userId and month required' };
-
-  // Check duplicate
+  if (!userId || !month) return { success: false, error: 'กรุณาระบุ userId และ month' };
   const sheet = getOrCreateSheet(SHEET_NAMES.BILLS,
-    ['id', 'userId', 'month', 'prevMeter', 'currMeter', 'units',
-     'waterFee', 'serviceFee', 'total', 'status', 'paidDate', 'createdAt']);
-  const existing = sheetToObjects(sheet).find(r => r.userId === userId && r.month === month);
-  if (existing) return { success: false, error: 'Bill already exists for this month', existing };
-
+    ['id','userId','month','prevMeter','currMeter','units',
+     'waterFee','serviceFee','total','status','paidDate','createdAt']);
+  const existing = sheetToObjects(sheet)
+    .find(r => String(r.userId) === String(userId) && r.month === month);
+  if (existing) return { success: false, error: 'มีใบแจ้งหนี้เดือนนี้แล้ว', existing };
   const id = params.id || generateId('B');
-  sheet.appendRow([id, userId, month, prevMeter || 0, currMeter || 0,
-    units || 0, waterFee || 0, serviceFee || 0, total || 0,
-    'unpaid', '', now()]);
+  sheet.appendRow([
+    id, userId, month,
+    Number(prevMeter)||0, Number(currMeter)||0, Number(units)||0,
+    Number(waterFee)||0, Number(serviceFee)||0, Number(total)||0,
+    'unpaid', '', now()
+  ]);
   return { success: true, id };
 }
 
-/** POST /updatePaymentStatus */
+// ===== สร้างบิลทั้งหมดอัตโนมัติ (มาตรฐานเทศบาลตำบล) =====
+// สร้างบิลพร้อมกันทุกหลังสำหรับเดือนที่กำหนด
+// - ข้ามหลังที่ยังไม่บันทึกมิเตอร์
+// - ข้ามหลังที่มีบิลแล้ว
+// - คำนวณค่าน้ำตามอัตราขั้นบันไดที่ตั้งค่าไว้
+function generateMonthlyBills(params) {
+  const { month } = params;
+  if (!month) return { success: false, error: 'กรุณาระบุ month (รูปแบบ yyyy-MM)' };
+
+  const settings  = getSettingsMap();
+  const serviceFee = Number(settings.service_fee) || 30;
+
+  const usersSheet = getOrCreateSheet(SHEET_NAMES.USERS,
+    ['id','name','house','phone','meter','createdAt']);
+  const metersSheet = getOrCreateSheet(SHEET_NAMES.METERS,
+    ['id','userId','month','prev','curr','units','recordedAt']);
+  const billsSheet = getOrCreateSheet(SHEET_NAMES.BILLS,
+    ['id','userId','month','prevMeter','currMeter','units',
+     'waterFee','serviceFee','total','status','paidDate','createdAt']);
+
+  const users = sheetToObjects(usersSheet);
+  const meters = sheetToObjects(metersSheet).filter(m => m.month === month);
+  const existingBills = sheetToObjects(billsSheet).filter(b => b.month === month);
+
+  const results = { created: 0, existing: 0, noMeter: 0, details: [] };
+
+  for (const user of users) {
+    const meter = meters.find(m => String(m.userId) === String(user.id));
+
+    if (!meter) {
+      results.noMeter++;
+      results.details.push({ userId: user.id, name: user.name, house: user.house, status: 'no_meter' });
+      continue;
+    }
+
+    if (existingBills.find(b => String(b.userId) === String(user.id))) {
+      results.existing++;
+      results.details.push({ userId: user.id, name: user.name, house: user.house, status: 'exists' });
+      continue;
+    }
+
+    const units    = Math.max(0, Number(meter.units) || 0);
+    const waterFee = calcWaterFeeGAS(units, settings);
+    const total    = waterFee + serviceFee;
+    const id       = generateId('B');
+
+    billsSheet.appendRow([
+      id, user.id, month,
+      Number(meter.prev)||0, Number(meter.curr)||0, units,
+      waterFee, serviceFee, total,
+      'unpaid', '', now()
+    ]);
+
+    results.created++;
+    results.details.push({
+      userId: user.id, name: user.name, house: user.house,
+      status: 'created', billId: id,
+      units, waterFee, serviceFee, total
+    });
+  }
+
+  return { success: true, month, ...results };
+}
+
 function updatePaymentStatus(params) {
   const { id, status, paidDate } = params;
   const sheet = getSheet(SHEET_NAMES.BILLS);
-  if (!sheet) return { success: false, error: 'Bills sheet not found' };
-
+  if (!sheet) return { success: false, error: 'ไม่พบ Bills sheet' };
   const row = findRowById(sheet, id);
-  if (row === -1) return { success: false, error: 'Bill not found' };
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = headers.indexOf('status') + 1;
+  if (row === -1) return { success: false, error: 'ไม่พบใบแจ้งหนี้' };
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  const statusCol   = headers.indexOf('status') + 1;
   const paidDateCol = headers.indexOf('paidDate') + 1;
-
   if (statusCol > 0) sheet.getRange(row, statusCol).setValue(status);
-  if (paidDateCol > 0) sheet.getRange(row, paidDateCol).setValue(paidDate || '');
-
+  if (paidDateCol > 0) sheet.getRange(row, paidDateCol).setValue(
+    status === 'paid'
+      ? (paidDate || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd'))
+      : ''
+  );
   return { success: true };
 }
 
 // ===== NOTIFICATIONS =====
-
-/** POST /sendLine */
 function sendLineNotify(params) {
   const { token, message } = params;
-  if (!token || !message) return { success: false, error: 'token and message required' };
-
+  if (!token || !message) return { success: false, error: 'กรุณาระบุ token และ message' };
   try {
-    const response = UrlFetchApp.fetch('https://notify-api.line.me/api/notify', {
+    const res = UrlFetchApp.fetch('https://notify-api.line.me/api/notify', {
       method: 'post',
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { 'Authorization': 'Bearer ' + token },
       payload: { message }
     });
-    const code = response.getResponseCode();
-    return { success: code === 200, code };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+    return { success: res.getResponseCode() === 200 };
+  } catch (e) { return { success: false, error: e.message }; }
 }
 
-/** POST /sendTelegram */
 function sendTelegramNotify(params) {
   const { token, chatId, message } = params;
-  if (!token || !chatId || !message) return { success: false, error: 'token, chatId, and message required' };
-
+  if (!token || !chatId || !message) return { success: false, error: 'กรุณาระบุ token, chatId, message' };
   try {
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    const response = UrlFetchApp.fetch(url, {
+    const url = 'https://api.telegram.org/bot' + token + '/sendMessage';
+    const res = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
       payload: JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' })
     });
-    const result = JSON.parse(response.getContentText());
+    const result = JSON.parse(res.getContentText());
     return { success: result.ok, result };
-  } catch (e) {
-    return { success: false, error: e.message };
-  }
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ===== STATS (สำหรับ Dashboard) =====
+function getStats(params) {
+  const { month } = params;
+  const targetMonth = month || Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM');
+
+  const users  = sheetToObjects(getSheet(SHEET_NAMES.USERS)  || null) || [];
+  const bills  = sheetToObjects(getSheet(SHEET_NAMES.BILLS)  || null) || [];
+  const meters = sheetToObjects(getSheet(SHEET_NAMES.METERS) || null) || [];
+
+  const mb = bills.filter(b => b.month === targetMonth);
+
+  return {
+    success: true,
+    month: targetMonth,
+    userCount:     users.length,
+    meterCount:    meters.filter(m => m.month === targetMonth).length,
+    totalUnits:    mb.reduce((s,b) => s + Number(b.units) , 0),
+    totalRevenue:  mb.reduce((s,b) => s + Number(b.total) , 0),
+    paidRevenue:   mb.filter(b=>b.status==='paid')  .reduce((s,b) => s + Number(b.total), 0),
+    unpaidRevenue: mb.filter(b=>b.status==='unpaid').reduce((s,b) => s + Number(b.total), 0),
+    paidCount:     mb.filter(b=>b.status==='paid').length,
+    unpaidCount:   mb.filter(b=>b.status==='unpaid').length,
+    billCount:     mb.length,
+  };
 }
 
 // ===== REPORTS =====
 function getReport(params) {
   const { year, type } = params;
   const billsSheet = getSheet(SHEET_NAMES.BILLS);
-  const usersSheet = getSheet(SHEET_NAMES.USERS);
-  if (!billsSheet) return { success: false, error: 'Bills sheet not found' };
-
+  if (!billsSheet) return { success: false, error: 'ไม่พบ Bills sheet' };
   const bills = sheetToObjects(billsSheet);
-  const users = usersSheet ? sheetToObjects(usersSheet) : [];
 
   if (type === 'monthly') {
     const report = [];
     for (let m = 1; m <= 12; m++) {
-      const monthKey = `${year}-${String(m).padStart(2, '0')}`;
-      const monthBills = bills.filter(b => b.month === monthKey);
+      const key = year + '-' + String(m).padStart(2,'0');
+      const mb  = bills.filter(b => b.month === key);
       report.push({
-        month: monthKey,
-        billCount: monthBills.length,
-        totalUnits: monthBills.reduce((s, b) => s + Number(b.units), 0),
-        totalRevenue: monthBills.reduce((s, b) => s + Number(b.total), 0),
-        paidRevenue: monthBills.filter(b => b.status === 'paid').reduce((s, b) => s + Number(b.total), 0),
-        unpaidRevenue: monthBills.filter(b => b.status === 'unpaid').reduce((s, b) => s + Number(b.total), 0),
+        month:         key,
+        billCount:     mb.length,
+        totalUnits:    mb.reduce((s,b)=>s+Number(b.units) ,0),
+        totalRevenue:  mb.reduce((s,b)=>s+Number(b.total) ,0),
+        paidRevenue:   mb.filter(b=>b.status==='paid')  .reduce((s,b)=>s+Number(b.total),0),
+        unpaidRevenue: mb.filter(b=>b.status==='unpaid').reduce((s,b)=>s+Number(b.total),0),
+        paidCount:     mb.filter(b=>b.status==='paid').length,
+        unpaidCount:   mb.filter(b=>b.status==='unpaid').length,
       });
     }
     return { success: true, data: report };
@@ -378,98 +532,104 @@ function getReport(params) {
 // ===== SETTINGS =====
 function getSettings() {
   const sheet = getOrCreateSheet(SHEET_NAMES.SETTINGS, ['Key', 'Value', 'Description']);
-  return { success: true, data: sheetToObjects(sheet) };
+  const data = sheetToObjects(sheet);
+  const map = {};
+  data.forEach(r => { if (r.Key) map[r.Key] = r.Value; });
+  return { success: true, data, map };
 }
 
 function saveSettings(params) {
   const sheet = getOrCreateSheet(SHEET_NAMES.SETTINGS, ['Key', 'Value', 'Description']);
   const { key, value, description } = params;
-  if (!key) return { success: false, error: 'key required' };
-
-  const data = sheetToObjects(sheet);
-  const existing = data.find(r => r.Key === key);
-
-  if (existing) {
-    const row = findRowById(sheet, key);
-    // For settings, Key is in col 1 but not 'id'
-    const allData = sheet.getDataRange().getValues();
-    for (let i = 1; i < allData.length; i++) {
-      if (allData[i][0] === key) {
-        sheet.getRange(i + 1, 2).setValue(value);
-        return { success: true };
-      }
+  if (!key) return { success: false, error: 'กรุณาระบุ key' };
+  const allData = sheet.getDataRange().getValues();
+  for (let i = 1; i < allData.length; i++) {
+    if (String(allData[i][0]) === String(key)) {
+      sheet.getRange(i+1, 2).setValue(value);
+      return { success: true };
     }
   }
-
   sheet.appendRow([key, value, description || '']);
   return { success: true };
 }
 
-// ===== INIT SHEETS (Run once to set up) =====
+// ===== INIT SHEETS (รันครั้งแรกเพื่อสร้างโครงสร้าง) =====
 function initSheets() {
   getOrCreateSheet(SHEET_NAMES.USERS,
-    ['id', 'name', 'house', 'phone', 'meter', 'createdAt']);
+    ['id','name','house','phone','meter','createdAt']);
 
   getOrCreateSheet(SHEET_NAMES.METERS,
-    ['id', 'userId', 'month', 'prev', 'curr', 'units', 'recordedAt']);
+    ['id','userId','month','prev','curr','units','recordedAt']);
 
   getOrCreateSheet(SHEET_NAMES.BILLS,
-    ['id', 'userId', 'month', 'prevMeter', 'currMeter', 'units',
-     'waterFee', 'serviceFee', 'total', 'status', 'paidDate', 'createdAt']);
+    ['id','userId','month','prevMeter','currMeter','units',
+     'waterFee','serviceFee','total','status','paidDate','createdAt']);
 
-  const settingsSheet = getOrCreateSheet(SHEET_NAMES.SETTINGS, ['Key', 'Value', 'Description']);
+  getOrCreateSheet(SHEET_NAMES.LOGS,
+    ['Timestamp','Action','Params']);
+
+  const settingsSheet = getOrCreateSheet(SHEET_NAMES.SETTINGS,
+    ['Key','Value','Description']);
+
+  const existing = sheetToObjects(settingsSheet).map(r => r.Key);
+
+  // ค่าเริ่มต้นมาตรฐานเทศบาลตำบล
   const defaults = [
-    ['village_name', 'บ้านสวนสวย', 'ชื่อหมู่บ้าน'],
+    ['village_name',    'บ้านสวนสวย',                         'ชื่อหมู่บ้าน/อปท.'],
     ['village_address', 'ม.5 ต.สวนหลวง อ.เมือง จ.เชียงใหม่', 'ที่อยู่'],
-    ['village_phone', '053-000-000', 'เบอร์ติดต่อ'],
-    ['service_fee', '30', 'ค่าบริการรายเดือน (บาท)'],
-    ['tier1_limit', '10', 'หน่วยสูงสุด tier 1'],
-    ['tier1_rate', '5', 'ราคา tier 1 (บาท/หน่วย)'],
-    ['tier2_limit', '30', 'หน่วยสูงสุด tier 2'],
-    ['tier2_rate', '8', 'ราคา tier 2 (บาท/หน่วย)'],
-    ['tier3_rate', '12', 'ราคา tier 3 (บาท/หน่วย)'],
-    ['admin_pass', 'admin1234', 'รหัสผ่าน Admin'],
-    ['staff_pass', 'staff1234', 'รหัสผ่านเจ้าหน้าที่'],
-    ['line_token', '', 'LINE Notify Token'],
-    ['telegram_token', '', 'Telegram Bot Token'],
+    ['village_phone',   '053-000-000',                         'เบอร์ติดต่อ'],
+    // โครงสร้างอัตราค่าน้ำ (ขั้นบันได 3 ระดับ)
+    ['service_fee',     '30',  'ค่าบริการรายเดือน (บาท)'],
+    ['tier1_limit',     '10',  'หน่วยสูงสุดขั้นที่ 1'],
+    ['tier1_rate',      '5',   'ราคาขั้นที่ 1 (บาท/หน่วย)'],
+    ['tier2_limit',     '30',  'หน่วยสูงสุดขั้นที่ 2'],
+    ['tier2_rate',      '8',   'ราคาขั้นที่ 2 (บาท/หน่วย)'],
+    ['tier3_rate',      '12',  'ราคาขั้นที่ 3 (บาท/หน่วย)'],
+    // ค่าน้ำขั้นต่ำ
+    ['min_units',       '0',   'หน่วยขั้นต่ำที่เรียกเก็บ (0 = ไม่มี)'],
+    // VAT (อปท. ส่วนใหญ่ไม่เก็บ)
+    ['vat_rate',        '0',   'อัตรา VAT % (0 = ไม่เก็บ)'],
+    // รหัสผ่าน
+    ['admin_pass',      'admin1234', 'รหัสผ่าน Admin'],
+    ['staff_pass',      'staff1234', 'รหัสผ่านเจ้าหน้าที่'],
+    // การแจ้งเตือน
+    ['line_token',       '', 'LINE Notify Token'],
+    ['telegram_token',   '', 'Telegram Bot Token'],
     ['telegram_chat_id', '', 'Telegram Chat ID'],
   ];
-  defaults.forEach(row => settingsSheet.appendRow(row));
 
-  getOrCreateSheet(SHEET_NAMES.LOGS, ['Timestamp', 'Action', 'Params']);
+  defaults.forEach(row => {
+    if (!existing.includes(row[0])) settingsSheet.appendRow(row);
+  });
 
-  // Format all sheets
   formatAllSheets();
-
-  return { success: true, message: 'Sheets initialized successfully' };
+  return { success: true, message: 'สร้าง Sheets สำเร็จ' };
 }
 
 function formatAllSheets() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  ss.getSheets().forEach(sheet => {
-    sheet.autoResizeColumns(1, sheet.getLastColumn());
-    if (sheet.getLastRow() > 1) {
-      // Zebra striping
+  SpreadsheetApp.openById(SPREADSHEET_ID).getSheets().forEach(sheet => {
+    try {
+      sheet.autoResizeColumns(1, sheet.getLastColumn());
       for (let i = 2; i <= sheet.getLastRow(); i++) {
-        const bg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
-        sheet.getRange(i, 1, 1, sheet.getLastColumn()).setBackground(bg);
+        sheet.getRange(i,1,1,sheet.getLastColumn())
+          .setBackground(i % 2 === 0 ? '#f8fafc' : '#ffffff');
       }
-    }
+    } catch(_) {}
   });
 }
 
-// ===== TRIGGER: Auto format on edit =====
+// ===== TRIGGER: auto-timestamp เมื่อ status เปลี่ยน =====
 function onEdit(e) {
-  // Auto-timestamp on bill status change
   const sheet = e.range.getSheet();
   if (sheet.getName() !== SHEET_NAMES.BILLS) return;
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const statusCol = headers.indexOf('status') + 1;
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  const statusCol   = headers.indexOf('status') + 1;
   const paidDateCol = headers.indexOf('paidDate') + 1;
-
-  if (e.range.getColumn() === statusCol && e.value === 'paid') {
-    sheet.getRange(e.range.getRow(), paidDateCol)
-      .setValue(Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd'));
+  if (e.range.getColumn() === statusCol && paidDateCol > 0) {
+    sheet.getRange(e.range.getRow(), paidDateCol).setValue(
+      e.value === 'paid'
+        ? Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd')
+        : ''
+    );
   }
 }
